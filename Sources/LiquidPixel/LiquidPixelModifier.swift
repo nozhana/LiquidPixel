@@ -9,42 +9,61 @@ import simd
 import SwiftUI
 
 struct LiquidPixelModifier: ViewModifier {
+    var simultaneous: Bool = false
+    var initialize: ((Binding<CGPoint>, Binding<CGSize>) -> Void)?
     @State private var dragLocation = CGPoint.zero
     @State private var dragVelocity = CGSize.zero
     
     func body(content: Content) -> some View {
+        let gesture = DragGesture()
+            .onChanged { value in
+                if dragLocation == .zero {
+                    dragLocation = value.location
+                }
+                withAnimation(.easeIn(duration: 0.6)) {
+                    dragLocation = value.location
+                    dragVelocity = value.velocity.applying(.init(scaleX: 0.5, y: 0.5))
+                }
+            }
+            .onEnded { value in
+                withAnimation(.easeOut(duration: 0.4)) {
+                    dragVelocity = .zero
+                    dragLocation = value.predictedEndLocation
+                } completion: {
+                    dragLocation = .zero
+                }
+            }
+        
         content
             .drawingGroup()
             .layerEffect(LPShaderLibrary.liquidPixel(
                 .float2(dragLocation),
                 .float2(dragVelocity)
             ), maxSampleOffset: .zero)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        withAnimation(.linear(duration: 0.1)) {
-                            dragLocation = value.location
-                            dragVelocity = value.velocity.applying(.init(scaleX: 0.3, y: 0.3))
-                        }
-                    }
-                    .onEnded { value in
-                        withAnimation(.easeOut(duration: 0.4)) {
-                            dragVelocity = .zero
-                        }
-                    }
-            )
+            .conditional(simultaneous) { content in
+                content
+                    .simultaneousGesture(gesture)
+            } ifFalse: { content in
+                content
+                    .gesture(gesture)
+            }
             .sensoryFeedback(trigger: dragVelocity) { _, newValue in
                 let distance = sqrt(newValue.width * newValue.width + newValue.height * newValue.height)
                 guard distance > .zero else { return nil }
                 let intensity = simd_smoothstep(0, 400, distance)
                 return .impact(weight: .medium, intensity: intensity)
             }
+            .onAppear {
+                if let initialize {
+                    initialize($dragLocation, $dragVelocity)
+                }
+            }
     }
 }
 
 public extension View {
-    func liquidPixel() -> some View {
-        modifier(LiquidPixelModifier())
+    func liquidPixel(registerSimultaneouslyWithOtherGestures: Bool = false, initialize: ((_ location: Binding<CGPoint>, _ velocity: Binding<CGSize>) -> Void)? = nil) -> some View {
+        modifier(LiquidPixelModifier(simultaneous: registerSimultaneouslyWithOtherGestures, initialize: initialize))
     }
 }
 
