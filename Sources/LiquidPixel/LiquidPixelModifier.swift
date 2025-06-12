@@ -10,6 +10,7 @@ import SwiftUI
 
 struct LiquidPixelModifier: ViewModifier {
     var simultaneous: Bool = false
+    var viscosity: CGFloat = 0.5
     var initialize: ((Binding<CGPoint>, Binding<CGSize>) -> Void)?
     @State private var dragLocation = CGPoint.zero
     @State private var dragVelocity = CGSize.zero
@@ -20,13 +21,14 @@ struct LiquidPixelModifier: ViewModifier {
                 if dragLocation == .zero {
                     dragLocation = value.location
                 }
-                withAnimation(.easeIn(duration: 0.6)) {
+                withAnimation(.easeIn(duration: 0.1.interpolated(towards: 1.1, amount: viscosity.clamped(to: 0...1)))) {
                     dragLocation = value.location
-                    dragVelocity = value.velocity.applying(.init(scaleX: 0.5, y: 0.5))
+                    dragVelocity = value.velocity.applying(.init(scaleX: 0.7.interpolated(towards: 0.3, amount: viscosity.clamped(to: 0...1)),
+                                                                 y: 0.7.interpolated(towards: 0.3, amount: viscosity.clamped(to: 0...1))))
                 }
             }
             .onEnded { value in
-                withAnimation(.easeOut(duration: 0.4)) {
+                withAnimation(.easeOut(duration: 0.1.interpolated(towards: 0.7, amount: viscosity.clamped(to: 0...1)))) {
                     dragVelocity = .zero
                     dragLocation = value.predictedEndLocation
                 } completion: {
@@ -62,14 +64,14 @@ struct LiquidPixelModifier: ViewModifier {
 }
 
 public extension View {
-    func liquidPixel(registerSimultaneouslyWithOtherGestures: Bool = false, initialize: ((_ location: Binding<CGPoint>, _ velocity: Binding<CGSize>) -> Void)? = nil) -> some View {
-        modifier(LiquidPixelModifier(simultaneous: registerSimultaneouslyWithOtherGestures, initialize: initialize))
+    func liquidPixel(registerSimultaneouslyWithOtherGestures: Bool = false, viscosity: CGFloat = 0.5, initialize: ((_ location: Binding<CGPoint>, _ velocity: Binding<CGSize>) -> Void)? = nil) -> some View {
+        modifier(LiquidPixelModifier(simultaneous: registerSimultaneouslyWithOtherGestures, viscosity: viscosity, initialize: initialize))
     }
 }
 
 #Preview {
     Text(Array(repeating: "Hello world! ", count: 100).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines))
-        .font(.system(size: 42, weight: .heavy))
+        .font(.system(size: 25, weight: .heavy))
         .foregroundStyle(.primary)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
